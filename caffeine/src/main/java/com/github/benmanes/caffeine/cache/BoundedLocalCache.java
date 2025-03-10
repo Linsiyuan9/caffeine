@@ -270,7 +270,7 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     drainBuffersTask = new PerformCleanupTask(this);
     nodeFactory = NodeFactory.newFactory(builder, isAsync);
     evictionListener = builder.getEvictionListener(isAsync);
-    data = new ConcurrentHashMap<>(builder.getInitialCapacity());
+    data = new ConcurrentHashMap<>(builder.getInitialCapacity());//1.ConcurrentHashMap是一个实现点,2.扩容因子是一个优化点
     readBuffer = evicts() || collectKeys() || collectValues() || expiresAfterAccess()
         ? new BoundedBuffer<>()
         : Buffer.disabled();
@@ -1601,10 +1601,9 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
   }
 
   /**
-   * Conditionally schedules the asynchronous maintenance task after a write operation. If the
-   * task status was IDLE or REQUIRED then the maintenance task is scheduled immediately. If it
-   * is already processing then it is set to transition to REQUIRED upon completion so that a new
-   * execution is triggered by the next operation.
+   * 有条件地调度写操作后的异步维护任务。如果任务状态为IDLE或REQUIRED，
+   * 则立即安排维护任务。如果它已经在处理，则在完成时将其设置为转换为REQUIRED，
+   * 以便由下一个操作触发新的执行。
    */
   void scheduleAfterWrite() {
     @Var int drainStatus = drainStatusOpaque();
@@ -2304,11 +2303,11 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     @Var Node<K, V> node = null;
     long now = expirationTicker().read();
     int newWeight = weigher.weigh(key, value);
-    Object lookupKey = nodeFactory.newLookupKey(key);
+    Object lookupKey = nodeFactory.newLookupKey(key);//弱引用key实现
     for (int attempts = 1; ; attempts++) {
-      @Var Node<K, V> prior = data.get(lookupKey);
-      if (prior == null) {
-        if (node == null) {
+      @Var Node<K, V> prior = data.get(lookupKey);//是否已存在
+      if (prior == null) {//不存在处理流程
+        if (node == null) {//因为是循环所以判断为空:创建新node
           node = nodeFactory.newNode(key, keyReferenceQueue(),
               value, valueReferenceQueue(), newWeight, now);
           long expirationTime = isComputingAsync(value) ? (now + ASYNC_EXPIRY) : now;
@@ -2316,7 +2315,7 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
           setAccessTime(node, expirationTime);
           setWriteTime(node, expirationTime);
         }
-        prior = data.putIfAbsent(node.getKeyReference(), node);
+        prior = data.putIfAbsent(node.getKeyReference(), node);//设置新值
         if (prior == null) {
           afterWrite(new AddTask(node, newWeight));
           return null;

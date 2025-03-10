@@ -20,6 +20,8 @@ import java.util.Random;
 import com.github.benmanes.caffeine.cache.BasicCache;
 import com.github.benmanes.caffeine.cache.CacheType;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.impl.CaffeineCache;
 import site.ycsb.generator.NumberGenerator;
 import site.ycsb.generator.ScrambledZipfianGenerator;
 
@@ -41,8 +43,9 @@ public final class CacheProfiler extends ProfilerHook {
   final boolean reads;
 
   CacheProfiler() {
-    cache = cacheType.create(2 * SIZE);
+//    cache = cacheType.create(2 * SIZE);
 
+    cache = new CaffeineCache<>(SIZE / 8);
     // Ensure full initialization of internal structures
     for (int i = 0; i < 2 * SIZE; i++) {
       cache.put(i, Boolean.TRUE);
@@ -68,21 +71,25 @@ public final class CacheProfiler extends ProfilerHook {
     }
   }
 
-  /** Spins forever reading from the cache. */
+  /**
+   * Spins forever reading from the cache.
+   */
   @SuppressWarnings("CheckReturnValue")
   private void reads() {
     int index = random.nextInt();
-    for (;;) {
+    for (; ; ) {
       Integer key = ints[index++ & MASK];
       cache.get(key);
       calls.increment();
     }
   }
 
-  /** Spins forever writing into the cache. */
+  /**
+   * Spins forever writing into the cache.
+   */
   private void writes() {
     int index = random.nextInt();
-    for (;;) {
+    for (; ; ) {
       Integer key = ints[index++ & MASK];
       cache.put(key, Boolean.TRUE);
       calls.increment();
