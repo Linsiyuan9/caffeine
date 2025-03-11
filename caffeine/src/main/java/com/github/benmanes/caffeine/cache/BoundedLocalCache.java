@@ -1128,8 +1128,10 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     if (amount == 0) {
       return;
     } else if (amount > 0) {
+      System.out.println("增加窗口");
       increaseWindow();
     } else {
+      System.out.println("减少窗口");
       decreaseWindow();
     }
   }
@@ -1148,9 +1150,11 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     if (requestCount < frequencySketch().sampleSize) {
       return;
     }
-
+    //当前命中率
     double hitRate = (double) hitsInSample() / requestCount;
+    //命中率对比之前
     double hitRateChange = hitRate - previousSampleHitRate();
+    //如果有降低就缩小,增长就扩
     double amount = (hitRateChange >= 0) ? stepSize() : -stepSize();
     double nextStepSize = (Math.abs(hitRateChange) >= HILL_CLIMBER_RESTART_THRESHOLD)
         ? HILL_CLIMBER_STEP_PERCENT * maximum() * (amount >= 0 ? 1 : -1)
@@ -1174,7 +1178,7 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     if (mainProtectedMaximum() == 0) {
       return;
     }
-
+    //保护windwos大小不操作最大阈值
     @Var long quota = Math.min(adjustment(), mainProtectedMaximum());
     setMainProtectedMaximum(mainProtectedMaximum() - quota);
     setWindowMaximum(windowMaximum() + quota);
@@ -1285,7 +1289,8 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
       statsCounter().recordHits(1);
     }
 
-    boolean delayable = skipReadBuffer() || (readBuffer.offer(node) != Buffer.FULL);
+    boolean b = skipReadBuffer();
+    boolean delayable = b|| (readBuffer.offer(node) != Buffer.FULL);
     if (shouldDrainBuffers(delayable)) {
       scheduleDrainBuffers();
     }
@@ -1638,7 +1643,7 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     if (drainStatusOpaque() >= PROCESSING_TO_IDLE) {
       return;
     }
-    if (evictionLock.tryLock()) {
+    if (evictionLock.tryLock()) {//double check
       try {
         int drainStatus = drainStatusOpaque();
         if (drainStatus >= PROCESSING_TO_IDLE) {
@@ -1724,19 +1729,23 @@ abstract class BoundedLocalCache<K, V> extends BLCHeader.DrainStatusRef
     setDrainStatusRelease(PROCESSING_TO_IDLE);
 
     try {
+      //消费读写事件
       drainReadBuffer();
-
       drainWriteBuffer();
+
       if (task != null) {
         task.run();
       }
 
+      //对应有开启软弱引用功能的,扫描这些数据还有没有在引用
       drainKeyReferences();
       drainValueReferences();
 
+      //淘汰策略
       expireEntries();
       evictEntries();
 
+      //调整窗口大小
       climb();
     } finally {
       if ((drainStatusOpaque() != PROCESSING_TO_IDLE)

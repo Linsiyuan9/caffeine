@@ -15,11 +15,14 @@
  */
 package com.github.benmanes.caffeine.cache.impl;
 
+import org.apache.jackrabbit.core.data.util.NamedThreadFactory;
 import org.jspecify.annotations.Nullable;
 
 import com.github.benmanes.caffeine.cache.BasicCache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+
+import java.util.concurrent.Executors;
 
 /**
  * @author ben.manes@gmail.com (Ben Manes)
@@ -29,9 +32,10 @@ public final class CaffeineCache<K, V> implements BasicCache<K, V> {
 
   public CaffeineCache(int maximumSize) {
     cache = Caffeine.newBuilder()
-        .initialCapacity(maximumSize)
-        .maximumSize(maximumSize)
-        .build();
+      .initialCapacity(maximumSize)
+      .maximumSize(maximumSize)
+      .executor(Executors.newFixedThreadPool(1, new NamedThreadFactory("back-thread")))
+      .build();
   }
 
   @Override
